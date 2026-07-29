@@ -26,7 +26,7 @@ class DocumentService:
         if not settings.gemini_api_key:
             raise Exception("Gemini API key is not configured.")
 
-        model = "models/text-embedding-004"
+        model = "models/gemini-embedding-001"
         url = f"https://generativelanguage.googleapis.com/v1beta/{model}:batchEmbedContents?key={settings.gemini_api_key}"
 
         requests = []
@@ -46,7 +46,7 @@ class DocumentService:
 
     def _ensure_index(self) -> None:
         if not self.index_path.exists():
-            dimension = 768  # Gemini text-embedding-004 dimension
+            dimension = 3072  # Gemini gemini-embedding-001 dimension
             index = faiss.IndexFlatL2(dimension)
             faiss.write_index(index, str(self.index_path))
             self._write_metadata([])
