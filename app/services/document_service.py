@@ -1,11 +1,11 @@
 import json
 import os
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Any
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -16,21 +16,37 @@ from app.db.models import Document, DocumentChunk
 class DocumentService:
     def __init__(self, db: Session):
         self.db = db
-        self._model: SentenceTransformer | None = None
         self.storage_dir = Path(settings.storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.index_path = Path(settings.vector_index_path)
         self.metadata_path = Path(settings.vector_metadata_path)
         self._ensure_index()
 
-    def _get_model(self) -> SentenceTransformer:
-        if self._model is None:
-            self._model = SentenceTransformer(settings.model_name)
-        return self._model
+    def _get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        if not settings.gemini_api_key:
+            raise Exception("Gemini API key is not configured.")
+
+        model = "models/text-embedding-004"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:batchEmbedContents?key={settings.gemini_api_key}"
+
+        requests = []
+        for text in texts:
+            requests.append({
+                "model": model,
+                "content": {
+                    "parts": [{"text": text}]
+                }
+            })
+
+        response = httpx.post(url, json={"requests": requests}, timeout=60.0)
+        response.raise_for_status()
+        data = response.json()
+
+        return [item["values"] for item in data["embeddings"]]
 
     def _ensure_index(self) -> None:
         if not self.index_path.exists():
-            dimension = 384
+            dimension = 768  # Gemini text-embedding-004 dimension
             index = faiss.IndexFlatL2(dimension)
             faiss.write_index(index, str(self.index_path))
             self._write_metadata([])
@@ -89,7 +105,7 @@ class DocumentService:
         if not chunks:
             return
         texts = [chunk.text for chunk in chunks]
-        embeddings = self._get_model().encode(texts, convert_to_numpy=True)
+        embeddings = self._get_embeddings(texts)
         index = faiss.read_index(str(self.index_path))
         metadata = self._read_metadata()
         for chunk, embedding in zip(chunks, embeddings):
@@ -102,7 +118,7 @@ class DocumentService:
     def search(self, query: str, top_k: int = 4) -> list[dict]:
         if not self.index_path.exists():
             return []
-        query_embedding = self._get_model().encode([query], convert_to_numpy=True)[0].astype(np.float32).reshape(1, -1)
+        query_embedding = np.asarray(self._get_embeddings([query])[0], dtype=np.float32).reshape(1, -1)
         index = faiss.read_index(str(self.index_path))
         distances, indices = index.search(query_embedding, min(top_k, index.ntotal))
         metadata = self._read_metadata()
