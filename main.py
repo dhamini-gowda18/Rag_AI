@@ -3,6 +3,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.exc import OperationalError
 
 from app.api.auth import router as auth_router
@@ -33,3 +35,23 @@ app.include_router(documents_router, prefix=settings.api_prefix)
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
+
+
+from fastapi.responses import JSONResponse
+from app.core.exceptions import AppError
+
+@app.exception_handler(AppError)
+def app_error_handler(request, exc: AppError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message}
+    )
+
+
+@app.get("/")
+def read_root():
+    return FileResponse("frontend/index.html")

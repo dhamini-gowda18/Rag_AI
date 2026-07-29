@@ -8,3 +8,6 @@ venv/
 *.pyc
 app.db
 storage/
+uploads/
+server.log
+get-pip.py

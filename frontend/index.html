@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FastAPI AI RAG Assistant</title>
+  <!-- Google Fonts (Inter & Outfit) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Dynamic Glowing Background Blobs -->
+  <div class="glow-bg">
+    <div class="blob blob-purple"></div>
+    <div class="blob blob-blue"></div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- AUTHENTICATION OVERLAY (Shown when logged out) -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card glass-panel">
+      <div class="auth-header">
+        <div class="logo">
+          <i class="fa-solid fa-brain-circuit brain-icon"></i>
+        </div>
+        <h2 class="app-title-font">RAG Assistant</h2>
+        <p id="authSubtitle" class="auth-subtitle">Login to start querying your documents</p>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label for="loginEmail"><i class="fa-regular fa-envelope"></i> Email Address</label>
+          <input type="email" id="loginEmail" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword"><i class="fa-solid fa-lock"></i> Password</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <span>Log In</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+        <p class="auth-toggle-text">Don't have an account? <a href="#" id="showSignup">Sign up here</a></p>
+      </form>
+
+      <!-- Signup Form (Hidden by default) -->
+      <form id="signupForm" class="auth-form hidden">
+        <div class="form-group">
+          <label for="signupName"><i class="fa-regular fa-user"></i> Full Name</label>
+          <input type="text" id="signupName" placeholder="John Doe" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label for="signupEmail"><i class="fa-regular fa-envelope"></i> Email Address</label>
+          <input type="email" id="signupEmail" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="signupPassword"><i class="fa-solid fa-lock"></i> Password (min 8 chars)</label>
+          <input type="password" id="signupPassword" placeholder="••••••••" required minlength="8" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <span>Create Account</span> <i class="fa-solid fa-user-plus"></i>
+        </button>
+        <p class="auth-toggle-text">Already have an account? <a href="#" id="showLogin">Log in here</a></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN APP DASHBOARD (Hidden when logged out) -->
+  <div id="appContainer" class="app-container hidden">
+    
+    <!-- Sidebar Panel -->
+    <aside class="sidebar glass-panel">
+      <!-- App Branding -->
+      <div class="sidebar-header">
+        <div class="brand">
+          <i class="fa-solid fa-brain-circuit brain-icon-small"></i>
+          <span class="app-title-font">RAG AI</span>
+        </div>
+      </div>
+
+      <!-- Current User Section -->
+      <div class="user-profile">
+        <div class="user-avatar">
+          <i class="fa-solid fa-user-shield"></i>
+        </div>
+        <div class="user-info">
+          <h4 id="userName">Loading...</h4>
+          <p id="userEmail">Loading...</p>
+        </div>
+        <button id="logoutBtn" class="btn-icon" title="Log Out">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+
+      <!-- Upload Document Section -->
+      <div class="sidebar-section">
+        <h3><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</h3>
+        <div id="dropZone" class="upload-zone">
+          <input type="file" id="fileInput" accept=".pdf,.txt" class="hidden">
+          <i class="fa-solid fa-file-pdf file-upload-icon"></i>
+          <p class="upload-text">Drag & drop files here or <span class="browse-link">browse</span></p>
+          <p class="upload-hint">Supports PDF & TXT files</p>
+        </div>
+        
+        <!-- Upload Progress & Status -->
+        <div id="uploadStatusContainer" class="upload-status-container hidden">
+          <div class="file-info">
+            <span id="uploadFileName" class="file-name">document.pdf</span>
+            <span id="uploadPercent" class="file-percent">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div id="uploadProgressBar" class="progress-fill"></div>
+          </div>
+          <div id="uploadMessage" class="upload-message">Uploading...</div>
+        </div>
+      </div>
+
+      <!-- Sidebar Instructions / Context info -->
+      <div class="sidebar-footer">
+        <p><i class="fa-solid fa-circle-info"></i> Documents are parsed and indexed locally using FAISS embeddings for semantic similarity search.</p>
+      </div>
+    </aside>
+
+    <!-- Chat & Main Workspace -->
+    <main class="chat-workspace glass-panel">
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="chat-title-container">
+          <h2>Semantic QA System</h2>
+          <div class="status-indicator">
+            <span class="pulse-dot"></span>
+            <span class="status-text">Connected</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Chat Feed -->
+      <div id="chatMessages" class="chat-messages">
+        <!-- Welcoming empty state -->
+        <div class="empty-chat-state">
+          <div class="welcome-icon">
+            <i class="fa-regular fa-comments"></i>
+          </div>
+          <h3>AI Document Assistant</h3>
+          <p>Please upload a PDF or TXT document on the sidebar first, then type a question. The AI will extract relevant text chunks from the document to generate context-rich answers.</p>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-footer">
+        <form id="chatForm" class="chat-form">
+          <div class="chat-input-wrapper">
+            <textarea id="chatInput" placeholder="Ask a question about your uploaded documents..." rows="1" required></textarea>
+            <button type="submit" id="sendBtn" class="btn-send" title="Send Question">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </form>
+      </footer>
+    </main>
+
+  </div>
+
+  <!-- App Main JS Script -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
